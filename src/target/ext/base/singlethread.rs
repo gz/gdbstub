@@ -10,18 +10,43 @@ use super::{ReplayLogPosition, SingleRegisterAccessOps};
 pub use super::{GdbInterrupt, ResumeAction};
 
 /// Base debugging operations for single threaded targets.
-#[allow(clippy::type_complexity)]
 pub trait SingleThreadOps: Target {
     /// Resume execution on the target.
     ///
     /// `action` specifies how the target should be resumed (i.e: step or
     /// continue).
     ///
-    /// The `check_gdb_interrupt` callback can be invoked to check if GDB sent
-    /// an Interrupt packet (i.e: the user pressed Ctrl-C). It's recommended to
-    /// invoke this callback every-so-often while the system is running (e.g:
-    /// every X cycles/milliseconds). Periodically checking for incoming
-    /// interrupt packets is _not_ required, but it is _recommended_.
+    /// # Checking for Ctrl-C interrupts
+    ///
+    /// The `gdb_interrupt` callback provides a conceptually simple, albeit
+    /// inefficient way check if GDB sent an Ctrl-C interrupt packet. It's
+    /// recommended to invoke this callback every-so-often while the system
+    /// is running (e.g: every X cycles/milliseconds), and returning a
+    /// `StopReason::GdbInterrupt` if an interrupt is encountered.
+    ///
+    /// Periodically checking for incoming interrupt packets is _not_ required,
+    /// but it is _recommended_.
+    ///
+    /// Note: targets using [deferred stop reasons](#Deferred-Stop-Reason)
+    /// should bypass the `gdb_interrupt` API, and check for GDB interrupts as
+    /// part of the
+    /// [`GdbStubStateMachine`](crate::state_machine::GdbStubStateMachine)
+    /// event loop.
+    ///
+    /// # Deferred Stop Reason
+    ///
+    /// If the target is running under the more advanced
+    /// [`GdbStubStateMachine`](crate::state_machine::GdbStubStateMachine) API,
+    /// it is possible to "defer" reporting a stop reason to some point outside
+    /// of the `resume` implementation by returning `None`.
+    ///
+    /// Returning `None` will immediately yield control back to
+    /// `GdbStubStateMachine`'s callee, while the target continues to run in the
+    /// background.
+    ///
+    /// Deferred stop reasons also allow an implementation to bypass the
+    /// conceptually simple `gdb_interrupt` API, and use whatever efficient
+    /// waiting mechanism
     ///
     /// # Implementation requirements
     ///
@@ -45,7 +70,7 @@ pub trait SingleThreadOps: Target {
         &mut self,
         action: ResumeAction,
         gdb_interrupt: GdbInterrupt<'_>,
-    ) -> Result<StopReason<<Self::Arch as Arch>::Usize>, Self::Error>;
+    ) -> Result<Option<StopReason<<Self::Arch as Arch>::Usize>>, Self::Error>;
 
     /// Support for the optimized [range stepping] resume action.
     ///
@@ -127,7 +152,7 @@ pub trait SingleThreadReverseCont: Target + SingleThreadOps {
     fn reverse_cont(
         &mut self,
         gdb_interrupt: GdbInterrupt<'_>,
-    ) -> Result<StopReason<<Self::Arch as Arch>::Usize>, Self::Error>;
+    ) -> Result<Option<StopReason<<Self::Arch as Arch>::Usize>>, Self::Error>;
 }
 
 define_ext!(SingleThreadReverseContOps, SingleThreadReverseCont);
@@ -142,7 +167,7 @@ pub trait SingleThreadReverseStep: Target + SingleThreadOps {
     fn reverse_step(
         &mut self,
         gdb_interrupt: GdbInterrupt<'_>,
-    ) -> Result<StopReason<<Self::Arch as Arch>::Usize>, Self::Error>;
+    ) -> Result<Option<StopReason<<Self::Arch as Arch>::Usize>>, Self::Error>;
 }
 
 define_ext!(SingleThreadReverseStepOps, SingleThreadReverseStep);
@@ -171,7 +196,7 @@ pub trait SingleThreadRangeStepping: Target + SingleThreadOps {
         start: <Self::Arch as Arch>::Usize,
         end: <Self::Arch as Arch>::Usize,
         gdb_interrupt: GdbInterrupt<'_>,
-    ) -> Result<StopReason<<Self::Arch as Arch>::Usize>, Self::Error>;
+    ) -> Result<Option<StopReason<<Self::Arch as Arch>::Usize>>, Self::Error>;
 }
 
 define_ext!(SingleThreadRangeSteppingOps, SingleThreadRangeStepping);
@@ -236,17 +261,4 @@ pub enum StopReason<U> {
     /// further execution can be done. This stop reason tells GDB that this has
     /// occurred.
     ReplayLog(ReplayLogPosition),
-    /// The target has been resumed, and will report a stop reason at some later
-    /// point.
-    ///
-    /// Requires: Using the
-    /// [`GdbStubStateMachine`](crate::state_machine::GdbStubStateMachine) API.
-    ///
-    /// Returning this stop reason will immediately yield control back to
-    /// `gdbstub`'s callee, while the target continues to run in the background.
-    ///
-    /// In the next breaking version of `gdbstub` (0.6), this variant will be
-    /// removed, and the signature of `resume` will be updated to return a
-    /// `Option<StopReason>` instead.
-    Defer,
 }
