@@ -40,7 +40,7 @@ impl<'a, C: Connection + 'a> ResponseWriter<'a, C> {
             checksum: 0,
             rle_char: 0,
             rle_repeat: 0,
-            #[cfg(feature = "std")]
+            #[cfg(feature = "alloc")]
             msg: Vec::new(),
         }
     }
@@ -76,7 +76,7 @@ impl<'a, C: Connection + 'a> ResponseWriter<'a, C> {
     }
 
     fn inner_write(&mut self, byte: u8) -> Result<(), Error<C::Error>> {
-        #[cfg(feature = "std")]
+        #[cfg(feature = "alloc")]
         if log_enabled!(log::Level::Trace) {
             match self.msg.as_slice() {
                 [.., c, b'*'] => {
