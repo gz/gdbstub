@@ -1,3 +1,5 @@
+use alloc::string::String;
+
 use num_traits::PrimInt;
 
 use crate::internal::BeBytes;
