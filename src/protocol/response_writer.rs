@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use alloc::string::String;
 
 use num_traits::PrimInt;
