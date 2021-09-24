@@ -51,7 +51,7 @@ impl<'a, C: Connection + 'a> ResponseWriter<'a, C> {
         // added to the checksum, and is just sitting in the RLE buffer)
         let checksum = self.checksum;
 
-        #[cfg(feature = "std")]
+        #[cfg(feature = "alloc")]
         trace!(
             "--> ${}#{:02x?}",
             String::from_utf8_lossy(&self.msg),
