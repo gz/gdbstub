@@ -26,7 +26,7 @@ pub struct ResponseWriter<'a, C: Connection + 'a> {
     rle_char: u8,
     rle_repeat: u8,
     // buffer to log outgoing packets. only allocates if logging is enabled.
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     msg: Vec<u8>,
 }
 
